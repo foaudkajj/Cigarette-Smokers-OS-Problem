@@ -1,271 +1,133 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System;
 using System.Threading;
 
 namespace ConsoleApplication1
 {
     class CSwithMutex
     {
-        //Here i have 4 Mutexes 
-        // agentMut : this mutex will be used by agents to see if any thread is putting ingredients or if any 
-        // smoker is making its cigarette
-        private static Mutex agentsMut = new Mutex(true);
-        private static Mutex tobbacoMut = new Mutex(true);
-        private static Mutex paperMut = new Mutex(true);
-        private static Mutex matchMut = new Mutex(true);
+        // Mut : this mutex will be used by agents to see if any agent is putting ingredients or if any 
+        // smoker is making its cigarette ( to check the freeness of the table )
+        private static Mutex Mut = new Mutex(false);
+
         //We have here varibales are using to make signaling between smokers and agents
         private static AutoResetEvent signalFromA = new AutoResetEvent(false);
         private static AutoResetEvent signalFromB = new AutoResetEvent(false);
         private static AutoResetEvent signalFromC = new AutoResetEvent(false);
-        private static AutoResetEvent signalToA = new AutoResetEvent(true);
-        private static AutoResetEvent signalToB = new AutoResetEvent(true);
-        private static AutoResetEvent signalToC = new AutoResetEvent(true);
+        
+        //Ingredients Value
+        private static int tobacco = 0, match = 0, paper = 0;
 
-        public CSwithMutex()
+        //This method will be invoked by the main menu
+        public void Beginning()
         {
-            // While the program is loading i have to release these mutexes to give the ability to threads to 
-            // acquire them for the first time
-            agentsMut.ReleaseMutex();
-            tobbacoMut.ReleaseMutex();
-            paperMut.ReleaseMutex();
-            matchMut.ReleaseMutex();
-
-        }
-        public void startAgents()
-        {
-            // For every Agent and Smoker i have one thread
-            Thread A = new Thread(startAgentA);
-            Thread B = new Thread(startAgentB);
-            Thread C = new Thread(startAgentC);
+            // Threads for the agents and the smokers
+            Thread StartAgents = new Thread(startAgents);
             Thread smokerMatchFun = new Thread(smokerMatch);
             Thread smokerTbaccoFun = new Thread(smokerTobbaco);
             Thread smokerPaperFun = new Thread(smokerPaper);
 
-
-
-            A.Start();
-            B.Start();
-            C.Start();
+            //Starting threads .
             smokerMatchFun.Start();
             smokerTbaccoFun.Start();
             smokerPaperFun.Start();
+            StartAgents.Start();
 
-
-
-            #region TestingCode
-            //Thread toabacoSmokerThread = new Thread(smokerTobbaco);
-            //toabacoSmokerThread.Start();
-            //ThreadPool.QueueUserWorkItem(new WaitCallback(startAgentC), autoEvent);
-            // autoEvent.WaitOne(); 
-            #endregion
         }
-
-        #region TestingCode
-        //static void startAgentC(object stateInfo)
-        //{
-        //    Console.WriteLine("Now is C with tobbaco and matches .");
-        //    agentsMut.WaitOne();
-        //    Thread.Sleep(new Random().Next(100, 2000));
-        //    agentsMut.ReleaseMutex();
-        //    ((AutoResetEvent)stateInfo).Set();
-        //} 
-        #endregion
-        static void startAgentA()
+        static void startAgents()
         {
             while (true)
             {
-                try
+                //waiting the mutex to be free
+                Mut.WaitOne();
+                int random = new Random().Next(1,4);
+                if (random == 1)
                 {
-                    //Here we are waiting the signal from smoker .
-                    //That signal tells this Agent that the smoking is finish and you can put another ingredients
-                    signalToA.WaitOne();
-                    // Agent A is waiting the Agent Mutex to be free
-                    agentsMut.WaitOne();
                     Console.WriteLine("Now is Agent A with paper and tobacco .");
-                    // Agent A is waiting Tobacco to be free
-                    tobbacoMut.WaitOne();
-                    Console.WriteLine("Tobacco is Active .");
-                    // Agent is waiting Paper Mutex to be free
-                    paperMut.WaitOne();
-                    Console.WriteLine("Paper is Active .");
-                    // Now proper ingredients are available on the table so we can signal 
-                    // the smoker to start its making cigarette and smoking
+                    Console.WriteLine($"Tobacco is Active and its value is : {++tobacco} ");
+                    Console.WriteLine($"Paper is Active and its value is : {++paper}");
+                    Thread.Sleep(new Random().Next(100, 2000));
+                    Console.WriteLine("Wakeup signal sent to Match Smokker");
+                    //Signal to the proper smoker
                     signalFromA.Set();
-                    // after making the cigarette we are now able to release our paper
-                    // and tobacco and agent mutex .
-                    // releasing paper and tobacco mutex giving the ability to another agent to use them .
-                    // releasing agent mutex giving the ability to another agent to start .
-                    paperMut.ReleaseMutex();
-                    tobbacoMut.ReleaseMutex();
-                    agentsMut.ReleaseMutex();
+
                 }
-                catch (Exception e)
+                else if (random == 2)
                 {
-                    Console.WriteLine(e.Message);
+                    Console.WriteLine("Now is agent B with paper and matches .");
+                    Console.WriteLine($"Match is Active and its value is : {++match}");;
+                    Console.WriteLine($"Paper is Active and its value is : {++paper}");
+                    Thread.Sleep(new Random().Next(100, 2000));
+                    Console.WriteLine("Wakeup signal sent to Tobacco Smokker");
+                    signalFromB.Set();
                 }
+                else
+                {
+                    Console.WriteLine("Now is agent C with tobacco and matches .");
+                    Console.WriteLine($"Match is Active and its value is : {++match}");
+                    Console.WriteLine($"Tobacco is Active and its value is : {++tobacco}");
+                    Thread.Sleep(new Random().Next(100, 2000));
+                    Console.WriteLine("Wakeup signal sent to Paper Smokker");
+                    signalFromC.Set();
+                }
+                //Freeing the mutex
+                Mut.ReleaseMutex();
+                
             }
 
-            //smokerMatch(stateInfo);
+            
         }
-
-        #region TestingCode
-        //static void MedA()
-        //{
-        //    matchMut.WaitOne();
-
-        //    agentsMut.WaitOne();
-        //    tobbacoMut.WaitOne();
-        //    paperMut.WaitOne();
-        //    agentsMut.ReleaseMutex();
-
-        //    Console.WriteLine("Making is completed by Tobacco and Paper .");
-        //    smokerMatch();
-
-        //} 
-        #endregion
 
         static void smokerMatch()
         {
             while (true)
             {
                 // Here the smoker can not start before receiving the signal from the Agent
-                // that indicates that the ingredients are on the table
                 signalFromA.WaitOne();
-                // Now in this line the smoker is making its cigarette and smoking
-                Console.WriteLine("Smoker Match is making Cigarette by Tobacco and Paper .");
+                //After receiving the signal it will wait until the mutex ( waiting the table )
+                Mut.WaitOne();
+
+                Console.WriteLine($"Smoker Match is making Cigarette by Tobacco and Paper . \n Tobacco value now is : {--tobacco} , Paper value now is : {--paper}");
                 Thread.Sleep(new Random().Next(100, 2000));
-                Console.WriteLine("Smoker Match is smoking  ....");
-                Thread.Sleep(new Random().Next(100, 4000));
-                // After consuming ingredients and smoking the smoker will reset the signal that comes from the agent
-                // and put it unsignaled to wait another singal when ingredients are on the table for new time
+
+                // Releasing the mutex (table )
+                Mut.ReleaseMutex();
+                //Resetting the signal to wait another signal from the agent .
                 signalFromA.Reset();
-                // Also after finishing smoking , The smoker has to tell the Agent that i have finished my ingredients and smoked my 
-                //cigarette so you can put another ingredients when you ca .
-                signalToA.Set();
+                Console.WriteLine("Smoker Match is smoking  ....");
+                Thread.Sleep(new Random().Next(100, 2000));
             }
         }
 
-        #region TestingCode
-        //static void smokingMatch()//object stateInfo)
-        //{
-
-        //    //((AutoResetEvent)stateInfo).Set();
-        //} 
-        #endregion
-
-
-
-
-
-
-
-
-
-
-
-
-
-        static void startAgentB()
+        static void smokerTobbaco()
         {
             while (true)
             {
-                try
-                {
-                    signalToB.WaitOne();
-                    agentsMut.WaitOne();
-                    Console.WriteLine("Now is agent B with paper and matches .");
-                    matchMut.WaitOne();
-                    Console.WriteLine("Match is Active .");
-                    paperMut.WaitOne();
-                    Console.WriteLine("Paper is Active .");
-                    signalFromB.Set();
-                    matchMut.ReleaseMutex();
-                    paperMut.ReleaseMutex();
-                    agentsMut.ReleaseMutex();
-                    Thread smokerTobaccoFun = new Thread(smokerTobbaco);
-                    smokerTobaccoFun.Start();
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                }
+                signalFromB.WaitOne();
+                Mut.WaitOne();
+                Console.WriteLine($"Smoker Tobacco is making Cigarette by Match and Paper .\n Match value now is : {--match} , Paper value now is : {--paper}");
+                Thread.Sleep(new Random().Next(100, 2000));
+                signalFromB.Reset();
+                Mut.ReleaseMutex();
+                Console.WriteLine("Smoker Tobacco is smoking  ....");
+                Thread.Sleep(new Random().Next(100, 2000));
             }
 
-
         }
 
 
-        #region TestingCode
-        //static void MedB()
-        //{
-        //    Console.WriteLine("Smoker is making Cigarette by Match and Paper .");
-        //    Thread.Sleep(new Random().Next(100, 2000));
-        //    Console.WriteLine("Making Cigarette is completed by Cigarette and Match .");
-        //    agentsMut.ReleaseMutex();
-        //    smokerTobbaco();
-
-        //} 
-        #endregion
-        static void smokerTobbaco()//object stateInfo)
-        {
-            signalFromB.WaitOne();
-            Console.WriteLine("Smoker Tobacco is making Cigarette by Match and Paper .");
-            Thread.Sleep(new Random().Next(100, 2000));
-            Console.WriteLine("Smoker Tobacco is smoking  ....");
-            Thread.Sleep(new Random().Next(100, 4000));
-            signalFromB.Reset();
-            signalToB.Set();
-
-        }
-
-        #region TestingCode
-        //static void smokingTobbaco()//object stateInfo)
-        //{
-
-        //    // ((AutoResetEvent)stateInfo).Set();
-        //} 
-        #endregion
-
-
-        static void startAgentC()//object stateInfo)
+        static void smokerPaper()
         {
             while (true)
             {
-                try
-                {
-                    signalToC.WaitOne();
-                    agentsMut.WaitOne();
-                    Console.WriteLine("Now is agent C with tobacco and matches .");
-                    matchMut.WaitOne();
-                    Console.WriteLine("Match is Active .");
-                    tobbacoMut.WaitOne();
-                    Console.WriteLine("Tobacco is Active .");
-                    signalFromC.Set();
-                    matchMut.ReleaseMutex();
-                    tobbacoMut.ReleaseMutex();
-                    agentsMut.ReleaseMutex();
-                    Thread smokerTobaccoFun = new Thread(smokerPaper);
-                    smokerTobaccoFun.Start();
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                }
+                signalFromC.WaitOne();
+                Mut.WaitOne();
+                Console.WriteLine($"Smoker Paper is making Cigarette by Match and Tobacco .\n Match value now is : {--match} , Tobacco value now is : {--tobacco}");
+                Thread.Sleep(new Random().Next(100, 2000));
+                signalFromC.Reset();
+                Mut.ReleaseMutex();
+                Console.WriteLine("Smoker Paper is smoking  ....");
+                Thread.Sleep(new Random().Next(100, 2000));
             }
-        }
-
-        static void smokerPaper()//object stateInfo)
-        {
-            signalFromC.WaitOne();
-            Console.WriteLine("Smoker Paper is making Cigarette by Match and Tobacco .");
-            Thread.Sleep(3000);
-            Console.WriteLine("Smoker Paper is smoking  ....");
-            Thread.Sleep(new Random().Next(100, 4000));
-            signalFromC.Reset();
-            signalToC.Set();
 
         }
 
